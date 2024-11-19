@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f7f7f7;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        button {
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+        }
+        .answer {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e9ecef;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        /* Position the voice icon at the bottom-left corner */
+        #voice-icon-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000; /* To make sure it stays on top */
+        }
+
+        /* Style for the voice icon to make it a circular chat bubble */
+        #voice-icon {
+            width: 100px; /* Adjust the size of the icon */
+            height: 100px;
+            border-radius: 50%; /* Make it circular */
+            background-color: #007BFF; /* Chat bubble color */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer; /* Make it look clickable */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Subtle shadow for depth */
+            transition: background-color 0.3s ease; /* Smooth transition on hover */
+        }
+
+        /* Add a hover effect to change the background color */
+        #voice-icon:hover {
+            background-color: #0056b3; /* Darker shade for hover effect */
+        }
+
+        /* Optional: if you want an icon inside the bubble, you can style it too */
+        #voice-icon i {
+            color: white; /* White color for the icon */
+            font-size: 30px; /* Adjust icon size */
+        }
+
+        /* Styling for question and answer displays */
+        #question-display, #answer-display {
+            margin: 20px;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+        }
+
+        #answer-display {
+            font-weight: bold;
+            color: #333;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="voice-icon-container">
+        <img src="https://tse3.mm.bing.net/th?id=OIP.CxoXl2WwdgT_XoSVHtJ3NAHaI6&pid=Api&P=0&h=180" alt="Voice Icon" id="voice-icon" />
+    </div>
+
+    <!-- Area to display the question and answer -->
+    <div id="question-display"></div>
+    <div id="answer-display"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const voiceIcon = document.getElementById('voice-icon');
+            const questionDisplay = document.getElementById('question-display');
+            const answerDisplay = document.getElementById('answer-display');
+
+            let recognition; // Variable to hold the SpeechRecognition instance
+            let silenceTimeout; // Timeout to detect silence
+
+            // Function to start speech recognition
+            function startRecognition() {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'en-US';
+
+                // Start listening
+                recognition.onstart = () => {
+                    questionDisplay.textContent = 'Listening...';
+                    answerDisplay.textContent = '';
+                    startSilenceTimer(); // Start silence detection timer
+                };
+
+                // Stop recognition once speech ends naturally
+                recognition.onspeechend = () => {
+                    clearSilenceTimer(); // Clear the silence timer
+                    recognition.stop();
+                };
+
+                // Handle recognized speech
+                recognition.onresult = async (event) => {
+                    clearSilenceTimer(); // Reset silence timer when speech is detected
+                    const userQuestion = event.results[0][0].transcript.trim().toLowerCase();
+                    questionDisplay.textContent =` You: ${userQuestion}`;
+
+                    try {
+                        // Fetch response from the updated API endpoint
+                        const response = await fetch(`/api/get-answer?question=${encodeURIComponent(userQuestion)}`);
+                        const data = await response.json();
+
+                        if (data.answer) {
+                            answerDisplay.textContent = `System: ${data.answer}`;
+                            speakAnswer(data.answer); // Speak the answer
+                        } else {
+                            answerDisplay.textContent = "System: Sorry, I don't have an answer.";
+                            speakAnswer("Sorry, I don't have an answer.");
+                        }
+                    } catch (error) {
+                        answerDisplay.textContent = 'Error: Unable to fetch the answer.';
+                        speakAnswer('Error: Unable to fetch the answer.');
+                    }
+                };
+
+                // Handle errors
+                recognition.onerror = (event) => {
+                    clearSilenceTimer();
+                    answerDisplay.textContent = 'Error occurred during recognition.';
+                    console.error('Recognition error:', event.error);
+                };
+
+                // Start recognition
+                recognition.start();
+            }
+
+            // Start the silence detection timer
+            function startSilenceTimer() {
+                clearSilenceTimer(); // Clear any existing timer
+                silenceTimeout = setTimeout(() => {
+                    if (recognition) {
+                        recognition.stop(); // Stop recognition after the timeout
+                        questionDisplay.textContent = 'Stopped listening due to silence.';
+                        answerDisplay.textContent = 'Click the voice icon to start again.';
+                    }
+                }, 5000); // Set silence timeout (e.g., 5 seconds)
+            }
+
+            // Clear the silence timer
+            function clearSilenceTimer() {
+                clearTimeout(silenceTimeout);
+            }
+
+            // Function to speak the answer using the SpeechSynthesis API
+            function speakAnswer(text) {
+                const speech = new SpeechSynthesisUtterance(text);
+                speech.lang = 'en-US';
+                window.speechSynthesis.speak(speech);
+            }
+
+            // Add event listener to the voice icon
+            voiceIcon.addEventListener('click', () => {
+                startRecognition();
+            });
+        });
+    </script>
+</body>
+</html> 
